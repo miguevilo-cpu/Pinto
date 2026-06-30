@@ -17,14 +17,16 @@
         }
 
         #menu-inicio { background: #242836; padding: 40px; border-radius: 24px; text-align: center; border: 2px solid #3e445b; z-index: 10; box-shadow: 0 20px 50px rgba(0,0,0,0.4); max-width: 420px; width: 100%; box-sizing: border-box; }
-        .contenedor-titulo { display: flex; justify-content: center; gap: 4px; margin-bottom: 20px; }
+        .contenedor-titulo { display: flex; justify-content: center; gap: 4px; margin-bottom: 20px; height: 5.5rem; align-items: center; }
         
-        /* 👑 ARREGLADO: Bloques con ancho fijo para que el menú NO se mueva ni cambie de tamaño */
+        /* 👑 ARREGLADO: Bloques con ancho, alto y line-height fijos para evitar brincos en vertical y horizontal */
         .letra-animada { 
             font-size: 4.5rem; 
             font-weight: 900; 
             display: inline-block; 
             width: 65px; 
+            height: 5.5rem;
+            line-height: 1;
             text-align: center;
             animation: cicloLetra 4s infinite alternate ease-in-out; 
         }
@@ -194,7 +196,7 @@
             const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); const ahora = audioCtx.currentTime;
             if (tipo === 'reloj') { osc.type = 'triangle'; osc.frequency.setValueAtTime(800, ahora); gain.gain.setValueAtTime(0.04, ahora); gain.gain.exponentialRampToValueAtTime(0.001, ahora + 0.03); osc.start(ahora); osc.stop(ahora + 0.04); }
             else if (tipo === 'adivinado') { osc.type = 'sine'; osc.frequency.setValueAtTime(600, ahora); osc.frequency.setValueAtTime(900, ahora + 0.08); gain.gain.setValueAtTime(0.12, ahora); gain.gain.exponentialRampToValueAtTime(0.01, ahora + 0.3); osc.start(ahora); osc.stop(ahora + 0.3); }
-            else if (tipo === 'victoria') { const notas = [520, 650, 780, 1040]; notas.forEach((frec, i) => { const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(frec, ahora + (i * 0.08)); g.gain.setValueAtTime(0.08, ahora + (i * 0.08)); g.gain.exponentialRampToValueAtTime(0.01, ahora + (i * 0.08) + 0.3); o.connect(g); g.connect(audioCtx.destination); o.start(ahora + (i * 0.08)); o.stop(ahora + (i * 0.08) + 0.3); }); }
+            else if (tipo === 'victoria') { const notas = [520, 650, 780, 1040]; notas.forEach((frec, i) => { const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(frec, ahora + (i * 0.08)); g.gain.setValueAtTime(0.08, entrepreneurs + (i * 0.08)); g.gain.exponentialRampToValueAtTime(0.01, ahora + (i * 0.08) + 0.3); o.connect(g); g.connect(audioCtx.destination); o.start(ahora + (i * 0.08)); o.stop(ahora + (i * 0.08) + 0.3); }); }
         }
 
         // --- 🍕 RENDERIZADOR DE PIZZA ---
