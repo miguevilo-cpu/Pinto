@@ -6,18 +6,28 @@ const path = require('path');
 
 app.use(express.static(path.join(__dirname, '')));
 
-// 3. 🧠 DICCIONARIO DE PALABRAS MÁS DIFÍCILES (Abstractas, complejas, técnicas)
-const palabrasDificiles = [
-    'aurora boreal', 'agujero negro', 'fotosintesis', 'neurotransmisor', 'ultrasonido',
-    'apendicitis', 'esquizofrenia', 'entropia', 'arquitectura', 'renacimiento',
-    'quijotesco', 'laberinto', 'criptografia', 'metamorfosis', 'telescopio',
-    'estetoscopio', 'electrocardiograma', 'claustrofobia', 'caleidoscopio', 'quimera',
-    'desoxirribonucleico', 'hipopotomonstrosesquipedaliofobia', 'infinitesimal', 'paradoja', 'gargantua'
+// 3. 🧠 PALABRAS COMPUESTAS/RELACIONADAS PARA EL MODO "DOBLE PALABRA"
+const parejasPalabras = [
+    { p1: "pez", p2: "martillo" },
+    { p1: "agujero", p2: "negro" },
+    { p1: "aurora", p2: "boreal" },
+    { p1: "carta", p2: "documental" },
+    { p1: "nave", p2: "espacial" },
+    { p1: "caballo", p2: "marino" },
+    { p1: "oso", p2: "polar" },
+    { p1: "gato", p2: "volador" },
+    { p1: "llave", p2: "inglesa" },
+    { p1: "perro", p2: "guardian" }
+];
+
+const palabrasSimplesDificiles = [
+    'fotosintesis', 'neurotransmisor', 'ultrasonido', 'apendicitis', 'esquizofrenia', 
+    'entropia', 'arquitectura', 'criptografia', 'metamorfosis', 'telescopio',
+    'estetoscopio', 'electrocardiograma', 'claustrofobia', 'caleidoscopio', 'paradoja'
 ];
 
 const MODOS_JUEGO = ["Normal", "Un Solo Trazo", "Doble Palabra"];
 
-// Estructura para almacenar el estado de las salas dinámicamente
 let salas = {
     "Sala Alpha": { jugadores: {}, partidaActiva: false, idDibujante: null, palabraActual: "", palabraActual2: "", guiones: "", tiempo: 60, ronda: 0, intervalorTimers: null, historialDibujantes: [] },
     "Sala Beta":  { jugadores: {}, partidaActiva: false, idDibujante: null, palabraActual: "", palabraActual2: "", guiones: "", tiempo: 60, ronda: 0, intervalorTimers: null, historialDibujantes: [] },
@@ -27,7 +37,6 @@ let salas = {
 io.on('connection', (socket) => {
     let salaActual = null;
 
-    // Enviar lista de salas disponibles apenas se conecta al inicio
     socket.emit('lista_salas', Object.keys(salas));
 
     socket.on('entrar_sala', (data) => {
@@ -37,37 +46,71 @@ io.on('connection', (socket) => {
         salaActual = sala;
         socket.join(salaActual);
 
-        // Inicializar jugador en la sala seleccionada
         salas[salaActual].jugadores[socket.id] = {
             id: socket.id,
             nombre: nombre,
             emoji: emoji,
             puntos: 0,
-            adivinado: false
+            adivinado: false,
+            listoParaReinicio: false // Bandera para el reinicio por consenso
         };
 
         io.to(salaActual).emit('mensaje_sistema', `👋 ${emoji} ${nombre} se ha unido a la ${salaActual}.`);
-        io.to(salaActual).emit('actualizar_puntos', Object.values(salas[salaActual].jugadores));
+        io.to(salaActual).emit('actualizar_puntos', Object.values(salas[salaActual].jugadores), salas[salaActual].idDibujante);
     });
 
     socket.on('iniciar_partida', () => {
         if (!salaActual || !salas[salaActual]) return;
         let s = salas[salaActual];
         
-        // 2. ⚙️ REINICIO LIMPIO AL 100% (Arregla pantalla final y reinicio)
+        // 🛑 VALIDACIÓN: Mínimo 2 jugadores para iniciar
+        let cantidadJugadores = Object.keys(s.jugadores).length;
+        if (cantidadJugadores < 2) {
+            socket.emit('mensaje_sistema', "⚠️ No se puede iniciar la partida: Se requieren mínimo 2 jugadores.");
+            return;
+        }
+
         clearInterval(s.intervalorTimers);
         s.partidaActiva = true;
         s.ronda = 0;
         s.historialDibujantes = [];
         
-        // Resetear puntos a 0 para una nueva partida limpia
         Object.keys(s.jugadores).forEach(id => {
             s.jugadores[id].puntos = 0;
             s.jugadores[id].adivinado = false;
+            s.jugadores[id].listoParaReinicio = false;
         });
 
-        io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores));
+        io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores), null);
         avanzarSiguienteTurno(salaActual);
+    });
+
+    // Voto para reiniciar cuando la partida ya terminó
+    socket.on('votar_reinicio', () => {
+        if (!salaActual || !salas[salaActual]) return;
+        let s = salas[salaActual];
+        if (s.jugadores[socket.id]) {
+            s.jugadores[socket.id].listoParaReinicio = true;
+            
+            let conteoListos = Object.values(s.jugadores).filter(j => j.listoParaReinicio).length;
+            let total = Object.keys(s.jugadores).length;
+
+            io.to(salaActual).emit('mensaje_sistema', `🔄 ${s.jugadores[socket.id].nombre} quiere volver a jugar (${conteoListos}/${total}).`);
+
+            // Si todos aceptan, se reinicia automáticamente
+            if (conteoListos === total && total >= 2) {
+                s.partidaActiva = true;
+                s.ronda = 0;
+                s.historialDibujantes = [];
+                Object.keys(s.jugadores).forEach(id => {
+                    s.jugadores[id].puntos = 0;
+                    s.jugadores[id].adivinado = false;
+                    s.jugadores[id].listoParaReinicio = false;
+                });
+                io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores), null);
+                avanzarSiguienteTurno(salaActual);
+            }
+        }
     });
 
     socket.on('enviar_mensaje', (texto) => {
@@ -78,9 +121,8 @@ io.on('connection', (socket) => {
 
         if (s.partidaActiva && socket.id !== s.idDibujante && !jugador.adivinado) {
             let acerto = false;
-            let msgNormalizado = texto.trim().toLowerCase();
+            let msgNormalizado = texto.trim().toLowerCase().replace(/\s+/g, ' ');
 
-            // 4. LÓGICA MODO DOBLE PALABRA (Deben adivinar ambas palabras con un espacio en medio)
             if (s.modoActual === "Doble Palabra") {
                 let combinacionCorrecta = `${s.palabraActual} ${s.palabraActual2}`;
                 if (msgNormalizado === combinacionCorrecta) {
@@ -94,16 +136,13 @@ io.on('connection', (socket) => {
 
             if (acerto) {
                 jugador.adivinado = true;
-                jugador.puntos += 100; // Puntos fijos por acierto duro
-                
-                // Darle un extra de 50 puntos al dibujante por transmitir bien su arte
+                jugador.puntos += 100;
                 if (s.jugadores[s.idDibujante]) s.jugadores[s.idDibujante].puntos += 50;
 
                 io.to(salaActual).emit('mensaje_sistema', `🎉 ¡${jugador.emoji} ${jugador.nombre} ADIVINÓ la palabra!`);
                 io.to(salaActual).emit('notificar_sonido', 'adivinado');
-                io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores));
+                io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores), s.idDibujante);
 
-                // Si todos los que no dibujan adivinaron, saltar el timer para no esperar de más
                 let todosAdivinaron = Object.values(s.jugadores).every(j => j.id === s.idDibujante || j.adivinado);
                 if (todosAdivinaron) {
                     s.tiempo = 0;
@@ -115,7 +154,6 @@ io.on('connection', (socket) => {
         io.to(salaActual).emit('nuevo_mensaje', { usuario: jugador.nombre, emoji: jugador.emoji, texto: texto });
     });
 
-    // --- RELÉ DE TRAZOS INDEPENDIENTES POR SALA ---
     socket.on('dibujo_empezar', (pos) => { if (salaActual) socket.to(salaActual).emit('dibujo_empezar_cliente', pos); });
     socket.on('dibujo_mover', (data) => { if (salaActual) socket.to(salaActual).emit('dibujo_mover_cliente', data); });
     socket.on('dibujo_limpiar', () => { if (salaActual) socket.to(salaActual).emit('dibujo_limpiar_cliente'); });
@@ -128,14 +166,14 @@ io.on('connection', (socket) => {
             let j = s.jugadores[socket.id];
             io.to(salaActual).emit('mensaje_sistema', `❌ ${j.emoji} ${j.nombre} abandonó la sala.`);
             delete s.jugadores[socket.id];
-            io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores));
+            io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores), s.idDibujante);
 
             if (Object.keys(s.jugadores).length === 0) {
                 clearInterval(s.intervalorTimers);
                 s.partidaActiva = false;
                 s.ronda = 0;
             } else if (socket.id === s.idDibujante) {
-                s.tiempo = 0; // Forzar cambio de turno si el dibujante se va
+                s.tiempo = 0;
             }
         }
     });
@@ -145,12 +183,11 @@ function avanzarSiguienteTurno(sala) {
     let s = salas[sala];
     if (!s) return;
 
-    // 1. 🏁 CONDICIÓN DE FIN DE JUEGO FIJADO A EXACTAMENTE 9 RONDAS
     if (s.ronda >= 9 || Object.keys(s.jugadores).length === 0) {
         s.partidaActiva = false;
         clearInterval(s.intervalorTimers);
         let podio = Object.values(s.jugadores).sort((a, b) => b.puntos - a.puntos);
-        io.to(sala).emit('partida_terminada', podio); // Lanza la pantalla de podio final en el cliente
+        io.to(sala).emit('partida_terminada', podio);
         return;
     }
 
@@ -158,7 +195,6 @@ function avanzarSiguienteTurno(sala) {
     s.tiempo = 60;
 
     let ids = Object.keys(s.jugadores);
-    // Elegir un dibujante que no haya dibujado recientemente de manera inteligente
     let disponibles = ids.filter(id => !s.historialDibujantes.includes(id));
     if (disponibles.length === 0) {
         s.historialDibujantes = [];
@@ -167,39 +203,35 @@ function avanzarSiguienteTurno(sala) {
     s.idDibujante = disponibles[Math.floor(Math.random() * disponibles.length)];
     s.historialDibujantes.push(s.idDibujante);
 
-    // Resetear banderas de adivinación para el nuevo turno
     Object.keys(s.jugadores).forEach(id => s.jugadores[id].adivinado = false);
-
-    // Configurar modo de juego de manera aleatoria incluyendo el de Doble Palabra
     s.modoActual = MODOS_JUEGO[Math.floor(Math.random() * MODOS_JUEGO.length)];
 
-    // Selección de palabras
-    s.palabraActual = palabrasDificiles[Math.floor(Math.random() * palabrasDificiles.length)];
+    // 4. GENERAR PALABRAS RELACIONADAS EN MODO DOBLE
     if (s.modoActual === "Doble Palabra") {
-        do {
-            s.palabraActual2 = palabrasDificiles[Math.floor(Math.random() * palabrasDificiles.length)];
-        } while (s.palabraActual2 === s.palabraActual);
-        
-        // Guiones combinados para las dos palabras
-        s.guiones = generarGuiones(s.palabraActual) + "   " + generarGuiones(s.palabraActual2);
+        let pareja = parejasPalabras[Math.floor(Math.random() * parejasPalabras.length)];
+        s.palabraActual = pareja.p1;
+        s.palabraActual2 = pareja.p2;
+        // Guiones con separación visual clara mediante un indicador de "Siguiente palabra"
+        s.guiones = `${generarGuiones(s.palabraActual)} &nbsp;&nbsp;[➕]&nbsp;&nbsp; ${generarGuiones(s.palabraActual2)}`;
     } else {
+        s.palabraActual = palabrasSimplesDificiles[Math.floor(Math.random() * palabrasSimplesDificiles.length)];
         s.palabraActual2 = "";
         s.guiones = generarGuiones(s.palabraActual);
     }
 
-    // Enviar estado inicial del turno
     io.to(sala).emit('actualizar_partida', {
         tiempo: s.tiempo,
         modo: s.modoActual,
         rondaVisual: s.ronda,
         idDibujante: s.idDibujante,
         guiones: s.guiones,
-        palabraCompleta: s.modoActual === "Doble Palabra" ? `${s.palabraActual} + ${s.palabraActual2}` : s.palabraActual
+        palabraCompleta: s.modoActual === "Doble Palabra" ? `${s.palabraActual} ${s.palabraActual2}` : s.palabraActual
     });
 
+    // Refrescar lista con la corona de pintor actualizada
+    io.to(sala).emit('actualizar_puntos', Object.values(s.jugadores), s.idDibujante);
     io.to(sala).emit('dibujo_limpiar_cliente');
 
-    // Intervalo único por sala
     clearInterval(s.intervalorTimers);
     s.intervalorTimers = setInterval(() => {
         s.tiempo--;
@@ -207,15 +239,15 @@ function avanzarSiguienteTurno(sala) {
 
         if (s.tiempo <= 0) {
             clearInterval(s.intervalorTimers);
-            io.to(sala).emit('mensaje_sistema', `⏳ Tiempo agotado. La respuesta era: ${s.palabraActual.toUpperCase()} ${s.palabraActual2 ? '+ ' + s.palabraActual2.toUpperCase() : ''}`);
-            setTimeout(() => avanzarSiguienteTurno(sala), 3000); // 3 segundos de pausa dramática entre turnos
+            io.to(sala).emit('mensaje_sistema', `⏳ Tiempo agotado. La respuesta era: ${s.palabraActual.toUpperCase()} ${s.palabraActual2 ? s.palabraActual2.toUpperCase() : ''}`);
+            setTimeout(() => avanzarSiguienteTurno(sala), 3000);
         }
     }, 1000);
 }
 
 function generarGuiones(palabra) {
-    return palabra.split('').map(letra => letra === ' ' ? ' ' : '_').join(' ');
+    return palabra.split('').map(() => '_').join(' ');
 }
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log(`🚀 Servidor de Pinto corriendo en puerto ${PORT}`));
+http.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));
