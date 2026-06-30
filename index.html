@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Pinto - ¡A dibujar!</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 0; margin: 0; background: #1a1c23; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; position: relative; }
+        
+        /* CAPA INVISIBLE PARA DESBLOQUEAR AUDIO INMEDIATAMENTE */
+        #desbloqueo-audio { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; background: rgba(0,0,0,0.01); cursor: pointer; }
+
+        /* CONTENEDOR DE EMOJIS FLOTANTES (DOODLES MONOCOLOR) */
+        #contenedor-doodles { position: absolute; width: 100%; height: 100%; top:0; left:0; z-index: 1; pointer-events: none; }
+        .doodle-emoji { position: absolute; bottom: -50px; font-size: 2.5rem; opacity: 0.08; filter: grayscale(100%) brightness(1.5); animation: ascender 12s linear infinite; }
+
+        @keyframes ascender {
+            0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.08; }
+            90% { opacity: 0.08; }
+            100% { transform: translateY(-110vh) rotate(360deg); opacity: 0; }
+        }
+
+        /* PORTADA MINIMALISTA */
+        #menu-inicio { background: #242836; padding: 40px; border-radius: 24px; text-align: center; border: 2px solid #3e445b; z-index: 10; box-shadow: 0 20px 50px rgba(0,0,0,0.4); max-width: 420px; width: 100%; box-sizing: border-box; position: relative; }
+        
+        /* TÍTULO PINTO ANIMADO POR LETRA */
+        .contenedor-titulo { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+        .letra-animada { font-size: 4.5rem; font-weight: 900; display: inline-block; animation: cicloLetra 4s infinite alternate ease-in-out; }
+        
+        .letra-animada:nth-child(1) { animation-delay: 0s; }
+        .letra-animada:nth-child(2) { animation-delay: 0.3s; }
+        .letra-animada:nth-child(3) { animation-delay: 0.6s; }
+        .letra-animada:nth-child(4) { animation-delay: 0.9s; }
+        .letra-animada:nth-child(5) { animation-delay: 1.2s; }
+
+        @keyframes cicloLetra {
+            0% { color: #ff4757; font-family: 'Arial Black', sans-serif; transform: scale(1); text-shadow: 0 0 8px rgba(255,71,87,0.4); }
+            25% { color: #2ed573; font-family: 'Impact', sans-serif; transform: scale(1.05) translateY(-5px); text-shadow: 0 0 8px rgba(46,213,115,0.4); }
+            50% { color: #1e90ff; font-family: 'Courier New', monospace; transform: scale(0.95); text-shadow: 0 0 8px rgba(30,144,255,0.4); }
+            75% { color: #ffa502; font-family: 'Georgia', serif; transform: scale(1.05) translateY(5px); text-shadow: 0 0 8px rgba(255,165,2,0.4); }
+            100% { color: #9b59b6; font-family: 'Comic Sans MS', cursive, sans-serif; transform: scale(1); text-shadow: 0 0 8px rgba(155,89,182,0.4); }
+        }
+
+        /* SELECTOR DE AVATARES */
+        .seccion-avatar { margin-bottom: 25px; }
+        .grid-emojis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 10px; background: #1e2230; padding: 12px; border-radius: 12px; border: 1px solid #3e445b; }
+        .emoji-opcion { font-size: 1.5rem; padding: 6px; cursor: pointer; border-radius: 8px; transition: 0.2s; user-select: none; }
+        .emoji-opcion:hover { background: #242836; transform: scale(1.15); }
+        .emoji-opcion.seleccionado { background: #4f46e5; box-shadow: 0 0 10px rgba(79,70,229,0.6); transform: scale(1.1); }
+
+        .input-gaming { background: #1e2230; border: 2px solid #3e445b; color: white; padding: 14px; border-radius: 10px; outline: none; font-size: 1rem; text-align: center; width: 90%; box-sizing: border-box; transition: 0.3s; }
+        .input-gaming:focus { border-color: #4f46e5; }
+        .input-gaming:disabled { background: #151720; color: #6b7280; cursor: not-allowed; }
+        
+        .btn-gaming { background: #4f46e5; color: white; border: none; padding: 12px 24px; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 1rem; }
+        .btn-gaming:hover { background: #6366f1; transform: translateY(-1px); }
+
+        /* INTERFAZ DE JUEGO */
+        #pantalla-juego { display: none; background: #242836; padding: 25px; border-radius: 20px; border: 1px solid #3e445b; z-index: 10; }
+        .cabecera-juego { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: #1e2230; padding: 10px 20px; border-radius: 10px; }
+        #temporizador { font-size: 1.4rem; font-weight: bold; color: #ef4444; }
+        #word-display { font-size: 1.6rem; letter-spacing: 5px; color: #38bdf8; font-weight: bold; text-align: center; margin: 10px 0; background: #1e2230; padding: 8px; border-radius: 8px; }
+        
+        .juego-contenedor { display: flex; gap: 20px; }
+        .zona-dibujo { display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 4px solid #1e2230; background: white; cursor: crosshair; border-radius: 12px; }
+        .barra-herramientas { display: flex; gap: 10px; margin-top: 15px; align-items: center; background: #1e2230; padding: 12px; border-radius: 12px; width: 100%; box-sizing: border-box; }
+        
+        .tablero-puntos { width: 180px; background: #1e2230; border-radius: 12px; padding: 15px; border: 1px solid #2e344a; }
+        .user-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 6px; background: #242836; border-radius: 8px; font-size: 0.95rem; }
+        .avatar-emoji { font-size: 1.3rem; background: #1a1c23; padding: 4px; border-radius: 50%; width: 28px; height: 28px; display: flex; justify-content: center; align-items: center; }
+
+        .zona-chat { display: flex; flex-direction: column; }
+        #chat { width: 260px; height: 300px; border: 1px solid #2e344a; overflow-y: auto; background: #1e2230; padding: 15px; border-radius: 12px; margin-bottom: 10px; font-size: 0.95rem; }
+        #chat p { margin: 6px 0; line-height: 1.4; }
+    </style>
+</head>
+<body>
+
+    <div id="desbloqueo-audio" onclick="forzarDesbloqueoAudio()"></div>
+
+    <audio id="musica-orquesta" loop></audio>
+
+    <div id="contenedor-doodles"></div>
+
+    <div id="menu-inicio">
+        <div class="contenedor-titulo">
+            <span class="letra-animada">P</span>
+            <span class="letra-animada">I</span>
+            <span class="letra-animada">N</span>
+            <span class="letra-animada">T</span>
+            <span class="letra-animada">O</span>
+        </div>
+        
+        <input type="text" id="nombre-usuario" class="input-gaming" placeholder="Tu apodo favorito..."><br><br>
+
+        <div class="seccion-avatar">
+            <label style="color:#a78bfa; font-weight:bold; font-size:0.95rem;">Selecciona tu Avatar:</label>
+            <div class="grid-emojis" id="selector-emojis"></div>
+        </div>
+
+        <button onclick="conectar()" class="btn-gaming" style="width: 90%;">Entrar a la Sala</button>
+    </div>
+
+    <div id="pantalla-juego">
+        <div class="cabecera-juego">
+            <div id="estado-juego">Esperando...</div>
+            <button id="btn-iniciar" class="btn-gaming" style="padding:6px 12px; font-size:0.9rem;" onclick="solicitarIniciarJuego()">Iniciar Partida</button>
+            <div id="temporizador">⏱️ 80s</div>
+        </div>
+
+        <div id="word-display">_ _ _ _ _</div>
+
+        <div class="juego-contenedor">
+            <div class="tablero-puntos">
+                <h4 style="margin-top:0; color:#a78bfa; text-align:center;">Jugadores</h4>
+                <div id="lista-puntos"></div>
+            </div>
+
+            <div class="zona-dibujo">
+                <canvas id="lienzo" width="500" height="380"></canvas>
+                <div class="barra-herramientas">
+                    <input type="color" id="paleta-rgb" style="cursor:pointer;" value="#000000" onchange="cambiarColor(this.value)">
+                    <select id="grosor" class="input-gaming" style="padding:4px; width:auto;" onchange="cambiarGrosor(this.value)">
+                        <option value="3">Fino</option>
+                        <option value="8">Medio</option>
+                        <option value="15">Grueso</option>
+                    </select>
+                    <button class="btn-gaming" style="padding:6px 12px;" onclick="activarHerramienta('lapiz')">✏️</button>
+                    <button class="btn-gaming" style="padding:6px 12px;" onclick="activarHerramienta('relleno')">🪣</button>
+                    <button class="btn-gaming" style="padding:6px 12px; background:#ef4444;" onclick="activarHerramienta('borrador')">🧽</button>
+                    <button class="btn-gaming" style="padding:6px 12px; background:#eab308;" onclick="deshacer()">↩️</button>
+                    <button class="btn-gaming" style="padding:6px 12px; background:#6b7280;" onclick="limpiarLienzo()">🗑️</button>
+                </div>
+            </div>
+
+            <div class="zona-chat">
+                <div id="chat"></div>
+                <input type="text" id="mensaje" class="input-gaming" style="width:100%; box-sizing:border-box; text-align:left;" placeholder="Tu respuesta..." onkeypress="detectarEnter(event)">
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('lienzo');
+        const ctx = canvas.getContext('2d');
+        
+        let dibujando = false;
+        let colorActual = '#000000';
+        let grosorActual = 3;
+        let herramientaActual = 'lapiz';
+        let miTurno = false;
+        let modoDeJuego = "Normal";
+        let trazosRealizados = 0;
+        let historialDibujo = [];
+        
+        const avataresDisponibles = ['🐱','🐶','🦊','🦁','🐸','🐵','🐼','🐨','🦖','🦄','🐙','🦉','😎','🤪','👾','🤖','🍕','🎨'];
+        let emojiSeleccionado = avataresDisponibles[0];
+
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        guardarEstado();
+
+        // --- GENERADOR DE DOODLES ---
+        const listaDoodles = ['✏️','🎨','📐','✂️','🖍️','📌','🔮','🎈','🧩','🧸','⚡','🌟','🍀','🍄'];
+        const contenedorDoodles = document.getElementById('contenedor-doodles');
+        
+        function crearDoodleFlotante() {
+            const div = document.createElement('div');
+            div.className = 'doodle-emoji';
+            div.innerText = listaDoodles[Math.floor(Math.random() * listaDoodles.length)];
+            div.style.left = Math.random() * 95 + '%';
+            const duracion = Math.random() * 6 + 8;
+            div.style.animationDuration = duracion + 's';
+            div.style.fontSize = Math.random() * 1.5 + 1.8 + 'rem';
+            contenedorDoodles.appendChild(div);
+            setTimeout(() => div.remove(), duracion * 1000);
+        }
+        setInterval(crearDoodleFlotante, 700);
+
+        // --- INICIALIZAR SELECTOR DE AVATARES ---
+        const gridAvatares = document.getElementById('selector-emojis');
+        avataresDisponibles.forEach((emo, index) => {
+            const span = document.createElement('span');
+            span.className = `emoji-opcion ${index === 0 ? 'seleccionado' : ''}`;
+            span.innerText = emo;
+            span.onclick = () => {
+                document.querySelectorAll('.emoji-opcion').forEach(el => el.classList.remove('seleccionado'));
+                span.classList.add('seleccionado');
+                emojiSeleccionado = emo;
+            };
+            gridAvatares.appendChild(span);
+        });
+
+        // --- CONTROL DE AUDIO ORQUESTAL REAL (.MP3) ---
+        const musicaPlayer = document.getElementById('musica-orquesta');
+        
+        // 1. Cargamos el archivo que pusiste en el servidor (o puedes usar un CDN público directo si prefieres)
+        musicaPlayer.src = 'mozart40.mp3'; 
+        musicaPlayer.volume = 0.15; // Volumen moderado de fondo para que puedan hablar en Discord/Chat
+
+        function arrancarMusicaDeFondo() {
+            if (musicaPlayer.paused) {
+                musicaPlayer.play().catch(err => console.log("Esperando interacción real del usuario..."));
+            }
+        }
+
+        function forzarDesbloqueoAudio() {
+            arrancarMusicaDeFondo();
+            const capa = document.getElementById('desbloqueo-audio');
+            if (capa) capa.remove(); 
+        }
+
+        // --- EFECTOS COMPLEMENTARIOS USANDO AUDIO CONTEXT ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(tipo) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const ahora = audioCtx.currentTime;
+
+            if (tipo === 'reloj') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(800, ahora); 
+                gain.gain.setValueAtTime(0.08, ahora); gain.gain.exponentialRampToValueAtTime(0.001, ahora + 0.03); 
+                osc.start(ahora); osc.stop(ahora + 0.04);
+            } 
+            else if (tipo === 'entrada') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(300, ahora); osc.frequency.exponentialRampToValueAtTime(900, ahora + 0.1);
+                gain.gain.setValueAtTime(0.08, ahora); gain.gain.exponentialRampToValueAtTime(0.01, ahora + 0.1);
+                osc.start(ahora); osc.stop(ahora + 0.1);
+            } 
+            else if (tipo === 'adivinado') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, ahora); osc.frequency.setValueAtTime(900, ahora + 0.08);
+                gain.gain.setValueAtTime(0.12, ahora); gain.gain.exponentialRampToValueAtTime(0.01, ahora + 0.3);
+                osc.start(ahora); osc.stop(ahora + 0.3);
+            } 
+            else if (tipo === 'victoria') {
+                const notas = [520, 650, 780, 1040];
+                notas.forEach((frec, i) => {
+                    const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = 'sine';
+                    o.frequency.setValueAtTime(frec, ahora + (i * 0.08)); g.gain.setValueAtTime(0.08, ahora + (i * 0.08));
+                    g.gain.exponentialRampToValueAtTime(0.01, ahora + (i * 0.08) + 0.3); o.connect(g); g.connect(audioCtx.destination);
+                    o.start(ahora + (i * 0.08)); o.stop(ahora + (i * 0.08) + 0.3);
+                });
+            }
+        }
+
+        function cambiarColor(color) { colorActual = color; if(herramientaActual==='borrador') herramientaActual='lapiz'; }
+        function cambiarGrosor(grosor) { grosorActual = grosor; }
+        function activarHerramienta(tipo) { herramientaActual = tipo; }
+        function guardarEstado() { if(historialDibujo.length > 15) historialDibujo.shift(); historialDibujo.push(canvas.toDataURL()); }
+
+        function deshacer() {
+            if (!miTurno || historialDibujo.length <= 1) return;
+            historialDibujo.pop();
+            let estadoAnterior = historialDibujo[historialDibujo.length - 1];
+            let img = new Image(); img.src = estadoAnterior;
+            img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); socket.emit('dibujo_deshacer', estadoAnterior); };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!miTurno) return;
+            if (modoDeJuego === "Un Solo Trazo" && trazosRealizados >= 1) return;
+            const pos = obtenerPosicion(e);
+            if (herramientaActual === 'relleno') { rellenarColor(pos.x, pos.y, colorActual); socket.emit('dibujo_relleno', { x: pos.x, y: pos.y, color: colorActual }); guardarEstado(); return; }
+            dibujando = true; ctx.beginPath(); ctx.moveTo(pos.x, pos.y); socket.emit('dibujo_empezar', pos);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!dibujando || herramientaActual === 'relleno' || !miTurno) return;
+            const pos = obtenerPosicion(e);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.strokeStyle = (herramientaActual === 'borrador') ? '#ffffff' : colorActual;
+            ctx.lineWidth = grosorActual; ctx.lineCap = 'round'; ctx.stroke();
+            socket.emit('dibujo_mover', { x: pos.x, y: pos.y, color: ctx.strokeStyle, grosor: grosorActual });
+        });
+
+        canvas.addEventListener('mouseup', () => { if(dibujando) { dibujando = false; guardarEstado(); if (modoDeJuego === "Un Solo Trazo") { trazosRealizados++; document.getElementById('estado-juego').innerText = "🚫 ¡Lápiz bloqueado!"; } } });
+        function obtenerPosicion(e) { const rect = canvas.getBoundingClientRect(); return { x: Math.floor(e.clientX - rect.left), y: Math.floor(e.clientY - rect.top) }; }
+        function limpiarLienzo() { if (!miTurno) return; ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); socket.emit('dibujo_limpiar'); guardarEstado(); }
+
+        // --- FLOOD FILL ---
+        function rellenarColor(startX, startY, colorRelleno) {
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height); const data = imgData.data; const targetColor = obtenerColorPixel(data, startX, startY); const fillColorRgb = hexToRgb(colorRelleno); if (coloresIguales(targetColor, fillColorRgb)) return;
+            const cola = [[startX, startY]];
+            while (cola.length > 0) {
+                const [x, y] = cola.shift(); if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) continue; const currentColor = obtenerColorPixel(data, x, y);
+                if (coloresIguales(currentColor, targetColor)) { fijarColorPixel(data, x, y, fillColorRgb); cola.push([x - 1, y]); cola.push([x + 1, y]); cola.push([x, y - 1]); cola.push([x, y + 1]); }
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+        function obtenerColorPixel(data, x, y) { const id = (y * canvas.width + x) * 4; return { r: data[id], g: data[id+1], b: data[id+2] }; }
+        function fijarColorPixel(data, x, y, rgb) { const id = (y * canvas.width + x) * 4; data[id] = rgb.r; data[id+1] = rgb.g; data[id+2] = rgb.b; data[id+3] = 255; }
+        function coloresIguales(c1, c2) { return Math.abs(c1.r - c2.r) < 30 && Math.abs(c1.g - c2.g) < 30 && Math.abs(c1.b - c2.b) < 30; }
+        function hexToRgb(hex) { const c = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); return c ? { r: parseInt(c[1], 16), g: parseInt(c[2], 16), b: parseInt(c[3], 16) } : { r:0, g:0, b:0 }; }
+
+        // --- EMISIÓN SOCKETS ---
+        socket.on('dibujo_empezar_cliente', (pos) => { ctx.beginPath(); ctx.moveTo(pos.x, pos.y); });
+        socket.on('dibujo_mover_cliente', (data) => { ctx.lineTo(data.x, data.y); ctx.strokeStyle = data.color; ctx.lineWidth = data.grosor; ctx.lineCap = 'round'; ctx.stroke(); });
+        socket.on('dibujo_limpiar_cliente', () => { ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); });
+        socket.on('dibujo_relleno_cliente', (data) => rellenarColor(data.x, data.y, data.color));
+        socket.on('dibujo_deshacer_cliente', (url) => { let img = new Image(); img.src = url; img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); }; });
+
+        function solicitarIniciarJuego() { socket.emit('iniciar_partida'); }
+        
+        socket.on('actualizar_partida', (data) => {
+            document.getElementById('btn-iniciar').style.display = 'none';
+            document.getElementById('temporizador').innerText = `⏱️ ${data.tiempo}s`;
+            modoDeJuego = data.modo; trazosRealizados = 0;
+            const inputChat = document.getElementById('mensaje');
+            document.getElementById('word-display').innerText = data.guiones;
+            
+            if (socket.id === data.idDibujante) {
+                document.getElementById('estado-juego').innerText = `🎨 MODO: ${data.modo} | Dibuja: ${data.palabraCompleta.toUpperCase()}`;
+                miTurno = true; inputChat.disabled = true; inputChat.placeholder = "¡Estás dibujando!";
+            } else {
+                document.getElementById('estado-juego').innerText = `👀 MODO: ${data.modo} | ¡Adivina!`;
+                miTurno = false; inputChat.disabled = false; inputChat.placeholder = "Escribe tu respuesta...";
+            }
+            ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        });
+
+        socket.on('actualizar_guiones', (guionesNuevos) => { document.getElementById('word-display').innerText = guionesNuevos; });
+
+        socket.on('tiempo_actualizado', (tiempo) => {
+            document.getElementById('temporizador').innerText = `⏱️ ${tiempo}s`;
+            if (tiempo > 0) playSound('reloj');
+        });
+
+        socket.on('notificar_sonido', (tipo) => { playSound(tipo); });
+
+        socket.on('actualizar_puntos', (lista) => {
+            const div = document.getElementById('lista-puntos'); div.innerHTML = "";
+            lista.forEach(j => {
+                div.innerHTML += `
+                    <div class="user-row">
+                        <div class="avatar-emoji">${j.emoji}</div>
+                        <div style="flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><b>${j.nombre}</b></div>
+                        <div style="color:#10b981; font-weight:bold;">${j.puntos}</div>
+                    </div>`;
+            });
+        });
+
+        function conectar() {
+            const nombre = document.getElementById('nombre-usuario').value;
+            if(nombre) {
+                arrancarMusicaDeFondo();
+                socket.emit('entrar_sala', { nombre: nombre, emoji: emojiSeleccionado });
+                document.getElementById('menu-inicio').style.display = 'none';
+                document.getElementById('pantalla-juego').style.display = 'block';
+            }
+        }
+        function detectarEnter(e) { if (e.key === 'Enter') enviar(); }
+        function enviar() { const campo = document.getElementById('mensaje'); if(campo.value) { socket.emit('enviar_mensaje', campo.value); campo.value = ''; } }
+        
+        socket.on('nuevo_mensaje', (data) => {
+            const chat = document.getElementById('chat'); 
+            chat.innerHTML += `<p>${data.emoji} <strong>${data.usuario}:</strong> ${data.texto}</p>`; 
+            chat.scrollTop = chat.scrollHeight;
+        });
+        socket.on('mensaje_sistema', (texto) => {
+            const chat = document.getElementById('chat'); chat.innerHTML += `<p style="color: #f59e0b;"><i>${texto}</i></p>`; chat.scrollTop = chat.scrollHeight;
+        });
+    </script>
+</body>
+</html>
