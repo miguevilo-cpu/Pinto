@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
 let jugadores = {};
 let palabraActual = "";
 let guionesActuales = "";
-let tiempoPartida = 80;
+let tiempoPartida = 60;
 let idDibujanteActual = null;
 let listaIdsTurnos = []; 
 let indiceTurnoActual = 0;
@@ -67,7 +67,7 @@ function avanzarSiguienteTurno() {
     palabraActual = elegirPalabra();
     guionesActuales = "_ ".repeat(palabraActual.length).trim();
     modoActual = modosDeJuego[Math.floor(Math.random() * modosDeJuego.length)];
-    tiempoPartida = 80;
+    tiempoPartida = 60;
     juegoIniciado = true;
 
     io.emit('actualizar_partida', {
