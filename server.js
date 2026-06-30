@@ -2,209 +2,220 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
+const path = require('path');
 
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, '')));
 
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
-});
+// 3. 🧠 DICCIONARIO DE PALABRAS MÁS DIFÍCILES (Abstractas, complejas, técnicas)
+const palabrasDificiles = [
+    'aurora boreal', 'agujero negro', 'fotosintesis', 'neurotransmisor', 'ultrasonido',
+    'apendicitis', 'esquizofrenia', 'entropia', 'arquitectura', 'renacimiento',
+    'quijotesco', 'laberinto', 'criptografia', 'metamorfosis', 'telescopio',
+    'estetoscopio', 'electrocardiograma', 'claustrofobia', 'caleidoscopio', 'quimera',
+    'desoxirribonucleico', 'hipopotomonstrosesquipedaliofobia', 'infinitesimal', 'paradoja', 'gargantua'
+];
 
-// --- VARIABLES DE CONTROL DEL JUEGO ---
-let jugadores = {};
-let palabraActual = "";
-let guionesActuales = "";
-let tiempoPartida = 60;
-let idDibujanteActual = null;
-let listaIdsTurnos = []; 
-let indiceTurnoActual = 0;
-let juegoIniciado = false;
-let temporizadorInterval = null;
-let jugadoresQueAdivinaron = new Set(); 
+const MODOS_JUEGO = ["Normal", "Un Solo Trazo", "Doble Palabra"];
 
-// Nuevas variables para el control de rondas (3 rondas por jugador)
-let rondaActual = 1;
-const MAX_RONDAS = 3; 
-
-const listaPalabras = ["perro", "gato", "casa", "carro", "sol", "manzana", "computadora", "guitarra", "arbol", "pizza", "control", "audifonos", "reloj", "abridor", "zapato", "helicoptero"];
-const modosDeJuego = ["Normal", "Un Solo Trazo", "Puntos Dobles"];
-let modoActual = "Normal";
-
-function elegirPalabra() {
-    return listaPalabras[Math.floor(Math.random() * listaPalabras.length)];
-}
-
-function avanzarSiguienteTurno() {
-    if (temporizadorInterval) clearInterval(temporizadorInterval);
-    jugadoresQueAdivinaron.clear(); 
-
-    listaIdsTurnos = Object.keys(jugadores);
-
-    if (listaIdsTurnos.length < 2) {
-        finalizarPartidaPrematuro("Partida cancelada. Se necesitan al menos 2 jugadores.");
-        return;
-    }
-
-    // Si es el primer turno de la partida
-    if (idDibujanteActual === null) {
-        indiceTurnoActual = 0;
-        rondaActual = 1;
-    } else {
-        indiceTurnoActual++;
-        // Si ya dibujaron todos los jugadores en esta ronda...
-        if (indiceTurnoActual >= listaIdsTurnos.length) {
-            indiceTurnoActual = 0; // Reiniciar ciclo de jugadores
-            rondaActual++;         // Avanzar a la siguiente ronda global
-        }
-    }
-
-    // Si superamos las 3 rondas estipuladas, el juego termina
-    if (rondaActual > MAX_RONDAS) {
-        declararGanadores();
-        return;
-    }
-
-    idDibujanteActual = listaIdsTurnos[indiceTurnoActual];
-    palabraActual = elegirPalabra();
-    guionesActuales = "_ ".repeat(palabraActual.length).trim();
-    modoActual = modosDeJuego[Math.floor(Math.random() * modosDeJuego.length)];
-    tiempoPartida = 60;
-    juegoIniciado = true;
-
-    io.emit('actualizar_partida', {
-        idDibujante: idDibujanteActual,
-        guiones: guionesActuales,
-        modo: modoActual,
-        tiempo: tiempoPartida,
-        palabraCompleta: palabraActual,
-        rondaVisual: rondaActual
-    });
-
-    io.emit('mensaje_sistema', `📢 [Ronda ${rondaActual}/${MAX_RONDAS}] ¡Turno de dibujar para ${jugadores[idDibujanteActual].nombre}!`);
-    io.emit('dibujo_limpiar_cliente'); 
-
-    iniciarTemporizador();
-}
-
-function iniciarTemporizador() {
-    temporizadorInterval = setInterval(() => {
-        if (tiempoPartida > 0) {
-            tiempoPartida--;
-            io.emit('tiempo_actualizado', tiempoPartida);
-        } else {
-            clearInterval(temporizadorInterval);
-            io.emit('mensaje_sistema', `⏱️ ¡Tiempo agotado! La palabra era: ${palabraActual.toUpperCase()}`);
-            io.emit('notificar_sonido', 'victoria');
-            
-            setTimeout(() => {
-                avanzarSiguienteTurno();
-            }, 4000);
-        }
-    }, 1000);
-}
-
-function verificarSiTodosAdivinaron() {
-    const totalJugadores = Object.keys(jugadores).length;
-    const adivinadoresObjetivo = totalJugadores - 1;
-
-    if (jugadoresQueAdivinaron.size >= adivinadoresObjetivo && adivinadoresObjetivo > 0) {
-        clearInterval(temporizadorInterval);
-        io.emit('mensaje_sistema', "🎉 ¡Todos han adivinado! Pasando al siguiente turno...");
-        io.emit('notificar_sonido', 'victoria');
-
-        setTimeout(() => {
-            avanzarSiguienteTurno();
-        }, 3000);
-    }
-}
-
-function declararGanadores() {
-    if (temporizadorInterval) clearInterval(temporizadorInterval);
-    juegoIniciado = false;
-
-    // Ordenar jugadores por puntos (de mayor a menor)
-    let podio = Object.values(jugadores).sort((a, b) => b.puntos - a.puntos);
-    
-    // Enviar el estado final a todos los clientes
-    io.emit('partida_terminada', podio);
-}
-
-function finalizarPartidaPrematuro(motivo) {
-    if (temporizadorInterval) clearInterval(temporizadorInterval);
-    juegoIniciado = false;
-    idDibujanteActual = null;
-    io.emit('mensaje_sistema', `🛑 ${motivo}`);
-    io.emit('forzar_regreso_lobby');
-}
+// Estructura para almacenar el estado de las salas dinámicamente
+let salas = {
+    "Sala Alpha": { jugadores: {}, partidaActiva: false, idDibujante: null, palabraActual: "", palabraActual2: "", guiones: "", tiempo: 60, ronda: 0, intervalorTimers: null, historialDibujantes: [] },
+    "Sala Beta":  { jugadores: {}, partidaActiva: false, idDibujante: null, palabraActual: "", palabraActual2: "", guiones: "", tiempo: 60, ronda: 0, intervalorTimers: null, historialDibujantes: [] },
+    "Sala Omega": { jugadores: {}, partidaActiva: false, idDibujante: null, palabraActual: "", palabraActual2: "", guiones: "", tiempo: 60, ronda: 0, intervalorTimers: null, historialDibujantes: [] }
+};
 
 io.on('connection', (socket) => {
+    let salaActual = null;
+
+    // Enviar lista de salas disponibles apenas se conecta al inicio
+    socket.emit('lista_salas', Object.keys(salas));
+
     socket.on('entrar_sala', (data) => {
-        jugadores[socket.id] = {
+        const { nombre, emoji, sala } = data;
+        if (!salas[sala]) return;
+
+        salaActual = sala;
+        socket.join(salaActual);
+
+        // Inicializar jugador en la sala seleccionada
+        salas[salaActual].jugadores[socket.id] = {
             id: socket.id,
-            nombre: data.nombre,
-            emoji: data.emoji || '🐱',
-            puntos: 0
+            nombre: nombre,
+            emoji: emoji,
+            puntos: 0,
+            adivinado: false
         };
-        io.emit('actualizar_puntos', Object.values(jugadores));
+
+        io.to(salaActual).emit('mensaje_sistema', `👋 ${emoji} ${nombre} se ha unido a la ${salaActual}.`);
+        io.to(salaActual).emit('actualizar_puntos', Object.values(salas[salaActual].jugadores));
     });
 
     socket.on('iniciar_partida', () => {
-        if (Object.keys(jugadores).length < 2) {
-            socket.emit('mensaje_sistema', "⚠️ Se necesitan al menos 2 jugadores.");
-            return;
-        }
-        // Reiniciar puntajes al iniciar una partida nueva limpia
-        for (let id in jugadores) { jugadores[id].puntos = 0; }
-        io.emit('actualizar_puntos', Object.values(jugadores));
+        if (!salaActual || !salas[salaActual]) return;
+        let s = salas[salaActual];
         
-        idDibujanteActual = null;
-        avanzarSiguienteTurno();
-    });
+        // 2. ⚙️ REINICIO LIMPIO AL 100% (Arregla pantalla final y reinicio)
+        clearInterval(s.intervalorTimers);
+        s.partidaActiva = true;
+        s.ronda = 0;
+        s.historialDibujantes = [];
+        
+        // Resetear puntos a 0 para una nueva partida limpia
+        Object.keys(s.jugadores).forEach(id => {
+            s.jugadores[id].puntos = 0;
+            s.jugadores[id].adivinado = false;
+        });
 
-    socket.on('dibujo_empezar', (pos) => { socket.broadcast.emit('dibujo_empezar_cliente', pos); });
-    socket.on('dibujo_mover', (data) => { socket.broadcast.emit('dibujo_mover_cliente', data); });
-    socket.on('dibujo_limpiar', () => { socket.broadcast.emit('dibujo_limpiar_cliente'); });
-    socket.on('dibujo_relleno', (data) => { socket.broadcast.emit('dibujo_relleno_cliente', data); });
-    socket.on('dibujo_deshacer', (url) => { socket.broadcast.emit('dibujo_deshacer_cliente', url); });
+        io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores));
+        avanzarSiguienteTurno(salaActual);
+    });
 
     socket.on('enviar_mensaje', (texto) => {
-        if (!jugadores[socket.id]) return;
-        const jugador = jugadores[socket.id];
+        if (!salaActual || !salas[salaActual]) return;
+        let s = salas[salaActual];
+        let jugador = s.jugadores[socket.id];
+        if (!jugador) return;
 
-        if (jugadoresQueAdivinaron.has(socket.id)) return;
+        if (s.partidaActiva && socket.id !== s.idDibujante && !jugador.adivinado) {
+            let acerto = false;
+            let msgNormalizado = texto.trim().toLowerCase();
 
-        if (juegoIniciado && socket.id !== idDibujanteActual && texto.toLowerCase().trim() === palabraActual.toLowerCase().trim()) {
-            let puntosGanados = modoActual === "Puntos Dobles" ? 200 : 100;
-            jugador.puntos += puntosGanados;
-            jugadoresQueAdivinaron.add(socket.id);
-            
-            io.emit('actualizar_puntos', Object.values(jugadores));
-            io.emit('mensaje_sistema', `🎉 ¡${jugador.nombre} adivinó la palabra! (+${puntosGanados} pts)`);
-            socket.emit('notificar_sonido', 'adivinado');
-            
-            verificarSiTodosAdivinaron();
-            return;
+            // 4. LÓGICA MODO DOBLE PALABRA (Deben adivinar ambas palabras con un espacio en medio)
+            if (s.modoActual === "Doble Palabra") {
+                let combinacionCorrecta = `${s.palabraActual} ${s.palabraActual2}`;
+                if (msgNormalizado === combinacionCorrecta) {
+                    acerto = true;
+                }
+            } else {
+                if (msgNormalizado === s.palabraActual.toLowerCase()) {
+                    acerto = true;
+                }
+            }
+
+            if (acerto) {
+                jugador.adivinado = true;
+                jugador.puntos += 100; // Puntos fijos por acierto duro
+                
+                // Darle un extra de 50 puntos al dibujante por transmitir bien su arte
+                if (s.jugadores[s.idDibujante]) s.jugadores[s.idDibujante].puntos += 50;
+
+                io.to(salaActual).emit('mensaje_sistema', `🎉 ¡${jugador.emoji} ${jugador.nombre} ADIVINÓ la palabra!`);
+                io.to(salaActual).emit('notificar_sonido', 'adivinado');
+                io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores));
+
+                // Si todos los que no dibujan adivinaron, saltar el timer para no esperar de más
+                let todosAdivinaron = Object.values(s.jugadores).every(j => j.id === s.idDibujante || j.adivinado);
+                if (todosAdivinaron) {
+                    s.tiempo = 0;
+                }
+                return;
+            }
         }
-        io.emit('nuevo_mensaje', { emoji: jugador.emoji, usuario: jugador.nombre, texto: texto });
+
+        io.to(salaActual).emit('nuevo_mensaje', { usuario: jugador.nombre, emoji: jugador.emoji, texto: texto });
     });
 
-    socket.on('disconnect', () => {
-        if (jugadores[socket.id]) {
-            const eraElDibujante = (socket.id === idDibujanteActual);
-            delete jugadores[socket.id];
-            io.emit('actualizar_puntos', Object.values(jugadores));
+    // --- RELÉ DE TRAZOS INDEPENDIENTES POR SALA ---
+    socket.on('dibujo_empezar', (pos) => { if (salaActual) socket.to(salaActual).emit('dibujo_empezar_cliente', pos); });
+    socket.on('dibujo_mover', (data) => { if (salaActual) socket.to(salaActual).emit('dibujo_mover_cliente', data); });
+    socket.on('dibujo_limpiar', () => { if (salaActual) socket.to(salaActual).emit('dibujo_limpiar_cliente'); });
+    socket.on('dibujo_relleno', (data) => { if (salaActual) socket.to(salaActual).emit('dibujo_relleno_cliente', data); });
+    socket.on('dibujo_deshacer', (url) => { if (salaActual) socket.to(salaActual).emit('dibujo_deshacer_cliente', url); });
 
-            if (juegoIniciado) {
-                if (Object.keys(jugadores).length < 2) {
-                    finalizarPartidaPrematuro("Jugadores insuficientes. Fin de la partida.");
-                } else if (eraElDibujante) {
-                    io.emit('mensaje_sistema', "🎨 El dibujante abandonó. Saltando turno...");
-                    avanzarSiguienteTurno();
-                } else {
-                    verificarSiTodosAdivinaron();
-                }
+    socket.on('disconnect', () => {
+        if (salaActual && salas[salaActual] && salas[salaActual].jugadores[socket.id]) {
+            let s = salas[salaActual];
+            let j = s.jugadores[socket.id];
+            io.to(salaActual).emit('mensaje_sistema', `❌ ${j.emoji} ${j.nombre} abandonó la sala.`);
+            delete s.jugadores[socket.id];
+            io.to(salaActual).emit('actualizar_puntos', Object.values(s.jugadores));
+
+            if (Object.keys(s.jugadores).length === 0) {
+                clearInterval(s.intervalorTimers);
+                s.partidaActiva = false;
+                s.ronda = 0;
+            } else if (socket.id === s.idDibujante) {
+                s.tiempo = 0; // Forzar cambio de turno si el dibujante se va
             }
         }
     });
 });
 
-http.listen(3000, () => { console.log('Servidor Pinto Online'); });
+function avanzarSiguienteTurno(sala) {
+    let s = salas[sala];
+    if (!s) return;
+
+    // 1. 🏁 CONDICIÓN DE FIN DE JUEGO FIJADO A EXACTAMENTE 9 RONDAS
+    if (s.ronda >= 9 || Object.keys(s.jugadores).length === 0) {
+        s.partidaActiva = false;
+        clearInterval(s.intervalorTimers);
+        let podio = Object.values(s.jugadores).sort((a, b) => b.puntos - a.puntos);
+        io.to(sala).emit('partida_terminada', podio); // Lanza la pantalla de podio final en el cliente
+        return;
+    }
+
+    s.ronda++;
+    s.tiempo = 60;
+
+    let ids = Object.keys(s.jugadores);
+    // Elegir un dibujante que no haya dibujado recientemente de manera inteligente
+    let disponibles = ids.filter(id => !s.historialDibujantes.includes(id));
+    if (disponibles.length === 0) {
+        s.historialDibujantes = [];
+        disponibles = ids;
+    }
+    s.idDibujante = disponibles[Math.floor(Math.random() * disponibles.length)];
+    s.historialDibujantes.push(s.idDibujante);
+
+    // Resetear banderas de adivinación para el nuevo turno
+    Object.keys(s.jugadores).forEach(id => s.jugadores[id].adivinado = false);
+
+    // Configurar modo de juego de manera aleatoria incluyendo el de Doble Palabra
+    s.modoActual = MODOS_JUEGO[Math.floor(Math.random() * MODOS_JUEGO.length)];
+
+    // Selección de palabras
+    s.palabraActual = palabrasDificiles[Math.floor(Math.random() * palabrasDificiles.length)];
+    if (s.modoActual === "Doble Palabra") {
+        do {
+            s.palabraActual2 = palabrasDificiles[Math.floor(Math.random() * palabrasDificiles.length)];
+        } while (s.palabraActual2 === s.palabraActual);
+        
+        // Guiones combinados para las dos palabras
+        s.guiones = generarGuiones(s.palabraActual) + "   " + generarGuiones(s.palabraActual2);
+    } else {
+        s.palabraActual2 = "";
+        s.guiones = generarGuiones(s.palabraActual);
+    }
+
+    // Enviar estado inicial del turno
+    io.to(sala).emit('actualizar_partida', {
+        tiempo: s.tiempo,
+        modo: s.modoActual,
+        rondaVisual: s.ronda,
+        idDibujante: s.idDibujante,
+        guiones: s.guiones,
+        palabraCompleta: s.modoActual === "Doble Palabra" ? `${s.palabraActual} + ${s.palabraActual2}` : s.palabraActual
+    });
+
+    io.to(sala).emit('dibujo_limpiar_cliente');
+
+    // Intervalo único por sala
+    clearInterval(s.intervalorTimers);
+    s.intervalorTimers = setInterval(() => {
+        s.tiempo--;
+        io.to(sala).emit('tiempo_actualizado', s.tiempo);
+
+        if (s.tiempo <= 0) {
+            clearInterval(s.intervalorTimers);
+            io.to(sala).emit('mensaje_sistema', `⏳ Tiempo agotado. La respuesta era: ${s.palabraActual.toUpperCase()} ${s.palabraActual2 ? '+ ' + s.palabraActual2.toUpperCase() : ''}`);
+            setTimeout(() => avanzarSiguienteTurno(sala), 3000); // 3 segundos de pausa dramática entre turnos
+        }
+    }, 1000);
+}
+
+function generarGuiones(palabra) {
+    return palabra.split('').map(letra => letra === ' ' ? ' ' : '_').join(' ');
+}
+
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => console.log(`🚀 Servidor de Pinto corriendo en puerto ${PORT}`));
