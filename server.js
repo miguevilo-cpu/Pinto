@@ -11,6 +11,28 @@ const parejasPalabras = [
     { p1: "pez", p2: "martillo" },
     { p1: "agujero", p2: "negro" },
     { p1: "aurora", p2: "boreal" },
+    { p1: "nave", p2: "espacial" },
+    { p1: "caballo", p2: "marino" },
+    { p1: "oso", p2: "polar" },
+    { p1: "gato", p2: "volador" },
+    { p1: "llave", p2: "inglesa" },
+    { p1: "perro", p2: "guardian" },
+    { p1: "ojo", p2: "clinico" },
+    { p1: "carta", p2: "documental" },
+    { p1: "isla", p2: "desierta" },
+    { p1: "reloj", p2: "arena" },
+    { p1: "tren", p2: "bala" },
+    { p1: "camisa", p2: "fuerza" },
+    { p1: "bomba", p2: "tiempo" },
+    { p1: "fuego", p2: "artificial" },
+    { p1: "guerra", p2: "galactica" },
+    { p1: "castillo", p2: "naipes" },
+    { p1: "Torre", p2: "Eiffel" },
+    { p1: "silla", p2: "ruedas" },
+    { p1: "arco", p2: "iris" },
+    { p1: "pez", p2: "martillo" },
+    { p1: "agujero", p2: "negro" },
+    { p1: "aurora", p2: "boreal" },
     { p1: "carta", p2: "documental" },
     { p1: "nave", p2: "espacial" },
     { p1: "caballo", p2: "marino" },
@@ -23,7 +45,14 @@ const parejasPalabras = [
 const palabrasSimplesDificiles = [
     'fotosintesis', 'neurotransmisor', 'ultrasonido', 'apendicitis', 'esquizofrenia', 
     'entropia', 'arquitectura', 'criptografia', 'metamorfosis', 'telescopio',
-    'estetoscopio', 'electrocardiograma', 'claustrofobia', 'caleidoscopio', 'paradoja'
+    'estetoscopio', 'electrocardiograma', 'claustrofobia', 'caleidoscopio', 'paradoja',
+    'fotosintesis', 'neurotransmisor', 'ultrasonido', 'apendicitis', 'esquizofrenia', 
+    'entropia', 'arquitectura', 'criptografia', 'metamorfosis', 'telescopio',
+    'estetoscopio', 'electrocardiograma', 'claustrofobia', 'caleidoscopio', 'paradoja',
+    'hipocondriaco', 'quijotesco', 'gargantua', 'infinitesimal', 'desoxirribonucleico',
+    'sistema', 'laboratorio', 'microscopio', 'escarabajo', 'laberinto', 'quimera',
+    'tsunami', 'catacumbas', 'jeroglifico', 'sarcofago', 'esfinge', 'constelacion',
+    'satelite', 'gravedad', 'oxigeno', 'arteria', 'neurona', 'hipocampo', 'radiografia'
 ];
 
 const MODOS_JUEGO = ["Normal", "Un Solo Trazo", "Doble Palabra"];
@@ -69,6 +98,9 @@ io.on('connection', (socket) => {
             socket.emit('mensaje_sistema', "⚠️ No se puede iniciar la partida: Se requieren mínimo 2 jugadores.");
             return;
         }
+
+        mezclarArray(parejasPalabras);
+        mezclarArray(palabrasSimplesDificiles);
 
         clearInterval(s.intervalorTimers);
         s.partidaActiva = true;
@@ -251,3 +283,19 @@ function generarGuiones(palabra) {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));
+// Algoritmo de Fisher-Yates para mezclar arrays de forma 100% caótica
+function mezclarArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+// Mezcla
+function mezclarArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
